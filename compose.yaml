@@ -1,0 +1,55 @@
+# Cities API demo stack.
+#
+# Usage:
+#   podman compose up -d --build     # build and start everything
+#   open http://localhost:8000/docs  # Swagger UI
+#   podman compose down              # stop and remove the containers
+#   podman compose down -v           # stop and also wipe the database volume
+#
+# Only the API port (8000) is published. PostgreSQL stays private to this
+# compose network; its 5432 port is never exposed to the host.
+
+name: backend
+
+services:
+  # PostgreSQL 18 in a container. Data lives in the named volume `pgdata`.
+  database:
+    image: public.ecr.aws/docker/library/postgres:18-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-cities}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-cities}
+      POSTGRES_DB: ${POSTGRES_DB:-cities}
+    volumes:
+      # PostgreSQL 18 sets PGDATA=/var/lib/postgresql/18/docker and declares
+      # VOLUME /var/lib/postgresql, so the named volume must mount at
+      # /var/lib/postgresql (not at /var/lib/postgresql/data) or the image
+      # refuses to start.
+      - pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-cities} -d ${POSTGRES_DB:-cities}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    restart: unless-stopped
+    # No `ports` on purpose: the database is never reachable from the host.
+
+  # FastAPI application, built from the local Containerfile.
+  backend:
+    build:
+      context: .
+      dockerfile: Containerfile
+    image: backend/cities-api:latest
+    environment:
+      # The compose service name `database` is the hostname here; never localhost.
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-cities}:${POSTGRES_PASSWORD:-cities}@database:5432/${POSTGRES_DB:-cities}
+    ports:
+      - "8000:8000"
+    depends_on:
+      database:
+        condition: service_healthy
+    restart: unless-stopped
+
+# Named volume holding the PostgreSQL data directory.
+volumes:
+  pgdata:
