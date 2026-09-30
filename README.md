@@ -54,6 +54,34 @@ Tables are created at startup with `Base.metadata.create_all()` — no Alembic.
 podman compose down -v    # stops the stack and deletes the pgdata volume
 ```
 
-## Roadmap
+## Deploy to Render
 
-- Deploy the same backend to Render.
+`render.yaml` is a Blueprint: one file provisions the whole stack — a native
+Python web service (`cities-api`) and a managed PostgreSQL instance
+(`cities-db`) — with `DATABASE_URL` wired automatically.
+
+### Quick path
+
+1. Push this repository to GitHub.
+2. Render Dashboard → **New** → **Blueprint** → connect the repository.
+3. Click **Deploy Blueprint**.
+4. Open `https://<service-name>.onrender.com` — Swagger UI lives at
+   `/docs`, health check at `/health`.
+
+### Free-plan caveats
+
+| Caveat | Effect |
+| ------ | ------ |
+| Free Postgres expires after 30 days | One free database per workspace; data is lost when it expires. |
+| Free web service idles after 15 min | First request after idle takes ~30 s to wake up. |
+
+### Reset / rollback
+
+- **Redeploy**: Dashboard → the service → **Manual Deploy** (re-runs the
+  Blueprint's build and start commands).
+- **Roll back**: Dashboard → the service → **Rollback** to the previous
+  deploy.
+- **Reset the database**: delete `cities-db` in the Dashboard, then
+  re-deploy the Blueprint. Tables are recreated at startup.
+
+## Roadmap

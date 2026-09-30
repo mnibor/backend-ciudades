@@ -1,0 +1,45 @@
+# Render Blueprint — one file provisions the whole stack.
+#
+# This Blueprint creates exactly two resources from the repository that
+# contains this file:
+#   * cities-db  — a managed PostgreSQL instance (databases entry)
+#   * cities-api — a native Python web service (services entry), wired to the
+#                  database through the DATABASE_URL environment variable
+#
+# Deploy it: Render Dashboard → New → Blueprint → connect this repository →
+# Deploy Blueprint. Render reads render.yaml at the repo root, provisions both
+# resources, and pushes the service.
+#
+# Free-plan caveats:
+#   * The free Postgres instance expires after 30 days (one free database per
+#     workspace) — see the databases entry below.
+#   * The free web service spins down after 15 minutes of inactivity; the
+#     first request after idle takes roughly 30 seconds — see the services
+#     entry below.
+
+services:
+  - type: web
+    name: cities-api
+    runtime: python # native Python runtime; no Docker image involved
+    plan: free
+    branch: main
+    buildCommand: pip install -r requirements.txt
+    # Render injects PORT (default 10000); the server must bind 0.0.0.0:$PORT.
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    # Free web service: spins down after 15 minutes of inactivity and takes
+    # ~30s to wake on the first request.
+    envVars:
+      - key: PYTHONUNBUFFERED
+        value: "1"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: cities-db
+          property: connectionString
+
+databases:
+  - name: cities-db
+    databaseName: cities
+    user: cities
+    plan: free # Free Postgres expires after 30 days; one per workspace.
+    # ipAllowList is omitted: it defaults to allow-all.
